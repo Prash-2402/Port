@@ -26,7 +26,6 @@ port-scanner/
 ├── scanner.py          ← Core scan logic (reusable module)
 ├── requirements.txt
 ├── Procfile
-├── render.yaml         ← Render Blueprint config
 ├── .gitignore
 └── templates/
     └── index.html      ← Full frontend (disclaimer modal + live UI)
@@ -52,24 +51,26 @@ Open **http://localhost:5000** in your browser.
 
 ---
 
-## Deploy to Render
+## Deploy to Render (Free Tier)
 
-Render is a modern cloud host with a generous free tier. This project includes a `render.yaml` Blueprint for automated deployment.
+Render offers a generous free tier. You can deploy this manually as a Web Service to avoid Blueprint payment requirements.
 
-1. **Push your code to GitHub**:
-   ```bash
-   cd port-scanner
-   git branch -M main
-   git remote add origin https://github.com/<your-username>/<your-repo>.git
-   git push -u origin main
-   ```
+1. **Create the Web Service**:
+   - Go to your Dashboard at **[dashboard.render.com](https://dashboard.render.com)**.
+   - Click **New** → **Web Service**.
+   - Select **Build and deploy from a Git repository** and connect this repository.
 
-2. **Deploy via Blueprint**:
-   - Create a free account at [render.com](https://render.com)
-   - Go to your Dashboard → **New** → **Blueprint**
-   - Connect your GitHub account and select this repository.
-   
-Render will automatically detect the app, install dependencies, start the Gunicorn server, and securely auto-generate your `SECRET_KEY` for you.
+2. **Configure the Service**:
+   - **Environment**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `gunicorn app:app --worker-class gevent --workers 2 --timeout 60`
+
+3. **Set Environment Variables**:
+   Under the *Environment Variables* section, add these variables:
+   - `SECRET_KEY`: (Click the *Generate* button or type a random string)
+   - `PYTHON_VERSION`: `3.11.0`
+
+Click **Create Web Service** and your app will be live securely in a few minutes!
 
 ---
 
