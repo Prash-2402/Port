@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: port-scanner
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --worker-class gevent --workers 2 --timeout 60
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SECRET_KEY
+        generateValue: true

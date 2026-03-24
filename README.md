@@ -1,6 +1,6 @@
 # ⚡ Port Scanner + Vulnerability Reporter
 
-A fast, production-ready TCP port scanner with a live hacker-themed web UI. Scans open ports in real time using 200 threads, maps them to service names, and flags high-risk ports with known CVE references. Built for deployment on Railway (free tier).
+A fast, production-ready TCP port scanner with a live hacker-themed web UI. Scans open ports in real time using 200 threads, maps them to service names, and flags high-risk ports with known CVE references. Built for deployment on Render (free tier).
 
 > **Legal Notice**: This tool is for educational and authorized testing only. Only scan hosts you own or have explicit written permission to test. Unauthorized port scanning may be illegal in your jurisdiction.
 
@@ -14,7 +14,7 @@ A fast, production-ready TCP port scanner with a live hacker-themed web UI. Scan
 | Scanning | `socket` · `concurrent.futures.ThreadPoolExecutor` |
 | Streaming | Server-Sent Events (SSE) |
 | Frontend | Single HTML file · Vanilla JS · CSS |
-| Production | Gunicorn + Gevent · Railway |
+| Production | Gunicorn + Gevent · Render |
 
 ---
 
@@ -26,7 +26,7 @@ port-scanner/
 ├── scanner.py          ← Core scan logic (reusable module)
 ├── requirements.txt
 ├── Procfile
-├── railway.json
+├── render.yaml         ← Render Blueprint config
 ├── .gitignore
 └── templates/
     └── index.html      ← Full frontend (disclaimer modal + live UI)
@@ -52,31 +52,24 @@ Open **http://localhost:5000** in your browser.
 
 ---
 
-## Deploy to Railway
+## Deploy to Render
 
-1. **Create a Railway account** at [railway.app](https://railway.app) (free tier available)
+Render is a modern cloud host with a generous free tier. This project includes a `render.yaml` Blueprint for automated deployment.
 
-2. **Install Railway CLI** (optional — you can also deploy via GitHub):
-   ```bash
-   npm install -g @railway/cli
-   railway login
-   ```
-
-3. **Push your project**:
+1. **Push your code to GitHub**:
    ```bash
    cd port-scanner
-   git init && git add . && git commit -m "initial"
-   railway init
-   railway up
+   git branch -M main
+   git remote add origin https://github.com/<your-username>/<your-repo>.git
+   git push -u origin main
    ```
 
-   Or connect via **GitHub**: Go to [railway.app/new](https://railway.app/new) → *Deploy from GitHub repo* → select your repo.
-
-4. **Set environment variables** in Railway dashboard:
-   - `SECRET_KEY` → any long random string (required for session security)
-   - `PORT` → Railway sets this automatically
-
-5. **Railway detects** `Procfile` and `railway.json` automatically. Your app will be live at `https://<project>.up.railway.app`.
+2. **Deploy via Blueprint**:
+   - Create a free account at [render.com](https://render.com)
+   - Go to your Dashboard → **New** → **Blueprint**
+   - Connect your GitHub account and select this repository.
+   
+Render will automatically detect the app, install dependencies, start the Gunicorn server, and securely auto-generate your `SECRET_KEY` for you.
 
 ---
 
