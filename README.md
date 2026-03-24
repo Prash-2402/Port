@@ -14,7 +14,7 @@ A fast, production-ready TCP port scanner with a live hacker-themed web UI. Scan
 | Scanning | `socket` · `concurrent.futures.ThreadPoolExecutor` |
 | Streaming | Server-Sent Events (SSE) |
 | Frontend | Single HTML file · Vanilla JS · CSS |
-| Production | Gunicorn + Gevent · Render |
+| Production | Gunicorn + Gthread · Render |
 
 ---
 
@@ -63,7 +63,7 @@ Render offers a generous free tier. You can deploy this manually as a Web Servic
 2. **Configure the Service**:
    - **Environment**: `Python 3`
    - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn app:app --worker-class gevent --workers 2 --timeout 60`
+   - **Start Command**: `gunicorn app:app --worker-class gthread --threads 4 --timeout 60`
 
 3. **Set Environment Variables**:
    Under the *Environment Variables* section, add these variables:
