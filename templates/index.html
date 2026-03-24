@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Port Scanner + Vulnerability Reporter</title>
+  <meta name="description" content="Fast TCP port scanner with live progress and vulnerability reporting. Educational and authorized testing only."/>
+  <style>
+    /* ── Reset ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:      #00ff41;
+      --green-dim:  #00b82e;
+      --green-dark: #002209;
+      --red:        #ff3333;
+      --red-dim:    #8b0000;
+      --yellow:     #ffd700;
+      --cyan:       #00e5ff;
+      --bg:         #0a0a0a;
+      --bg-card:    #0f0f0f;
+      --border:     #1a2a1a;
+      --text:       #a0c0a0;
+      --text-dim:   #3a5a3a;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 14px;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── Scanlines ───────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,255,65,0.012) 2px, rgba(0,255,65,0.012) 4px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    /* ── Header ──────────────────────────────────────────── */
+    header { text-align: center; margin-bottom: 2rem; }
+
+    h1 {
+      font-size: clamp(1.1rem, 4vw, 1.6rem);
+      font-weight: bold;
+      color: var(--green);
+      letter-spacing: 0.12em;
+      text-shadow: 0 0 14px rgba(0,255,65,0.4);
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    /* ── Card ────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .card-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--green-dim);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Form ────────────────────────────────────────────── */
+    .form-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 0.85rem;
+    }
+
+    @media (max-width: 480px) {
+      .form-row { grid-template-columns: 1fr; }
+    }
+
+    .field { display: flex; flex-direction: column; gap: 0.35rem; }
+
+    label {
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      background: #080808;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--green);
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.55rem 0.75rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+
+    input:focus {
+      border-color: var(--green-dim);
+      box-shadow: 0 0 0 2px rgba(0,255,65,0.07);
+    }
+
+    input::placeholder { color: var(--text-dim); }
+
+    .form-actions {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn {
+      font-family: inherit;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+      padding: 0.65rem 1.75rem;
+      transition: opacity 0.2s, box-shadow 0.2s, transform 0.1s;
+    }
+
+    .btn:active { transform: translateY(1px); }
+
+    .btn-primary {
+      background: var(--green);
+      color: #000;
+      font-weight: bold;
+      box-shadow: 0 0 12px rgba(0,255,65,0.25);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 0 22px rgba(0,255,65,0.45);
+    }
+
+    .btn-primary:disabled {
+      background: var(--green-dark);
+      color: var(--text-dim);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--green-dim);
+      color: var(--green-dim);
+    }
+
+    .btn-outline:hover:not(:disabled) {
+      background: rgba(0,255,65,0.06);
+    }
+
+    .btn-outline:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+    .btn-danger {
+      background: transparent;
+      border: 1px solid var(--red);
+      color: var(--red);
+    }
+
+    .btn-danger:hover { background: rgba(255,51,51,0.08); }
+
+    /* ── Error message ───────────────────────────────────── */
+    #error-msg {
+      display: none;
+      margin-top: 0.75rem;
+      color: var(--red);
+      font-size: 0.82rem;
+      padding: 0.5rem 0.75rem;
+      border-left: 2px solid var(--red);
+      background: rgba(255,51,51,0.05);
+    }
+
+    /* ── Progress ────────────────────────────────────────── */
+    #progress-section { display: none; }
+
+    .prog-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-dim);
+    }
+
+    #prog-pct { color: var(--green); font-weight: bold; }
+
+    .prog-track {
+      width: 100%;
+      height: 6px;
+      background: var(--green-dark);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+
+    #prog-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--green-dim), var(--green));
+      border-radius: 3px;
+      transition: width 0.4s ease;
+      box-shadow: 0 0 8px rgba(0,255,65,0.35);
+    }
+
+    /* ── Terminal log ────────────────────────────────────── */
+    #terminal {
+      background: #050505;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 0.75rem 0.9rem;
+      height: 180px;
+      overflow-y: auto;
+      font-size: 0.78rem;
+      line-height: 1.75;
+      color: var(--text-dim);
+    }
+
+    #terminal .ln { display: block; }
+    #terminal .ok  { color: var(--green); }
+    #terminal .err { color: var(--red); }
+    #terminal .hi  { color: var(--cyan); }
+
+    #terminal::-webkit-scrollbar { width: 3px; }
+    #terminal::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* ── Stats bar ───────────────────────────────────────── */
+    #stats { display: none; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.65rem;
+      margin-bottom: 1.25rem;
+    }
+
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat {
+      background: #080808;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 0.65rem 0.75rem;
+      text-align: center;
+    }
+
+    .stat-lbl { font-size: 0.58rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-dim); }
+    .stat-val { font-size: 1.2rem; font-weight: bold; margin-top: 0.15rem; }
+    .stat-val.g { color: var(--green); }
+    .stat-val.c { color: var(--cyan); }
+    .stat-val.y { color: var(--yellow); }
+    .stat-val.r { color: var(--red); }
+
+    /* ── Results ─────────────────────────────────────────── */
+    #results-section { display: none; }
+
+    .result-actions {
+      display: flex;
+      gap: 0.65rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+
+    thead th {
+      background: #090909;
+      color: var(--text-dim);
+      font-size: 0.62rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr { border-bottom: 1px solid rgba(26,42,26,0.5); }
+    tbody tr:hover { background: rgba(0,255,65,0.02); }
+
+    td { padding: 0.6rem 0.75rem; vertical-align: top; }
+
+    td.port  { color: var(--cyan); font-weight: bold; white-space: nowrap; }
+    td.svc   { color: var(--text); white-space: nowrap; }
+    td.rsn   { color: var(--text-dim); font-size: 0.75rem; }
+
+    tr.high  { background: rgba(139,0,0,0.15); }
+    tr.high td.port { color: #ff6b6b; }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      padding: 0.18rem 0.45rem;
+      border-radius: 2px;
+      font-weight: bold;
+    }
+
+    .badge-HIGH { background: rgba(139,0,0,0.4); color: #ff6b6b; border: 1px solid var(--red-dim); }
+    .badge-Low  { background: rgba(0,255,65,0.07); color: var(--green-dim); border: 1px solid var(--border); }
+
+    .no-results {
+      text-align: center;
+      padding: 2.5rem;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    /* ── Disclaimer Modal ────────────────────────────────── */
+    #modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9998;
+      padding: 1.25rem;
+    }
+
+    #modal {
+      background: #0c0c0c;
+      border: 1px solid var(--green-dim);
+      border-radius: 4px;
+      padding: 2rem;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 0 40px rgba(0,255,65,0.08);
+    }
+
+    #modal h2 {
+      color: var(--green);
+      font-size: 0.85rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #modal p {
+      color: var(--text);
+      font-size: 0.82rem;
+      line-height: 1.8;
+      margin-bottom: 1.5rem;
+    }
+
+    #modal p strong { color: var(--red); }
+
+    .modal-actions { display: flex; gap: 0.75rem; }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      margin-top: 3rem;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Fade in ─────────────────────────────────────────── */
+    .fade { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Disclaimer Modal ──────────────────────────────────────────────── -->
+<div id="modal-overlay">
+  <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <h2 id="modal-title">⚠ Legal Disclaimer</h2>
+    <p>
+      This tool is for <strong>educational and authorized testing only</strong>.<br/><br/>
+      By clicking <em>I Agree</em>, you confirm that you have <strong>explicit permission</strong>
+      to scan the target host. Unauthorized port scanning may be
+      <strong>illegal in your jurisdiction</strong> and could result in civil or criminal liability.<br/><br/>
+      The authors of this tool accept no responsibility for misuse.
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="agree-btn" onclick="acceptDisclaimer()">✔ I Agree</button>
+      <button class="btn btn-danger"  onclick="window.close(); window.location.href='about:blank';">✖ Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main UI ───────────────────────────────────────────────────────── -->
+<div class="wrap">
+
+  <header>
+    <h1>⚡ PORT SCANNER</h1>
+    <p class="subtitle">Vulnerability Reporter &nbsp;·&nbsp; TCP Connect &nbsp;·&nbsp; Threaded</p>
+  </header>
+
+  <!-- Scan Form -->
+  <section class="card">
+    <p class="card-label">// Target Configuration</p>
+
+    <div class="form-row">
+      <div class="field">
+        <label for="target">Target IP / Domain</label>
+        <input type="text" id="target" placeholder="e.g. 93.184.216.34" autocomplete="off" spellcheck="false"/>
+      </div>
+      <div class="field">
+        <label for="sp">Start Port</label>
+        <input type="number" id="sp" value="1" min="1" max="65535"/>
+      </div>
+      <div class="field">
+        <label for="ep">End Port</label>
+        <input type="number" id="ep" value="1000" min="1" max="65535"/>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" id="scan-btn" disabled onclick="startScan()">▶ SCAN</button>
+      <button class="btn btn-outline"  id="again-btn" style="display:none" onclick="resetUI()">↺ Scan Again</button>
+      <button class="btn btn-outline"  id="dl-btn"    style="display:none" onclick="downloadReport()">↓ Download Report</button>
+    </div>
+
+    <div id="error-msg" role="alert"></div>
+  </section>
+
+  <!-- Progress -->
+  <section class="card" id="progress-section">
+    <p class="card-label">// Live Progress</p>
+    <div class="prog-header">
+      <span id="prog-label">Scanning...</span>
+      <span id="prog-pct">0%</span>
+    </div>
+    <div class="prog-track">
+      <div id="prog-bar"></div>
+    </div>
+    <div id="terminal"></div>
+  </section>
+
+  <!-- Stats -->
+  <div id="stats">
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-lbl">Ports Scanned</div><div class="stat-val c" id="s-scanned">—</div></div>
+      <div class="stat"><div class="stat-lbl">Open Ports</div>   <div class="stat-val g" id="s-open">—</div></div>
+      <div class="stat"><div class="stat-lbl">Duration</div>     <div class="stat-val y" id="s-time">—</div></div>
+      <div class="stat"><div class="stat-lbl">Critical + High</div><div class="stat-val r" id="s-risk">—</div></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <section class="card fade" id="results-section">
+    <p class="card-label">// Vulnerability Report</p>
+    <div id="results-wrap"></div>
+  </section>
+
+</div>
+
+<footer>
+  Port Scanner + Vulnerability Reporter &nbsp;·&nbsp; Educational &amp; Authorized Use Only
+</footer>
+
+<script>
+  /* ── State ───────────────────────────────────────── */
+  let disclaimerAccepted = false;
+  let currentEvtSrc = null;
+  let lastResults   = [];
+  let lastMeta      = {};
+
+  /* ── Disclaimer ──────────────────────────────────── */
+  async function acceptDisclaimer() {
+    document.getElementById('agree-btn').disabled = true;
+    document.getElementById('agree-btn').textContent = '...';
+    try {
+      const r = await fetch('/agree', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' } });
+      if (!r.ok) throw new Error();
+    } catch (_) { /* continue anyway — server check is the gate */ }
+
+    disclaimerAccepted = true;
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('scan-btn').disabled = false;
+  }
+
+  /* ── Utilities ───────────────────────────────────── */
+  function showErr(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = '⚠ ' + msg;
+    el.style.display = 'block';
+  }
+
+  function clearErr() {
+    const el = document.getElementById('error-msg');
+    el.style.display = 'none';
+    el.textContent = '';
+  }
+
+  function log(text, cls = '') {
+    const term = document.getElementById('terminal');
+    const s = document.createElement('span');
+    s.className = 'ln' + (cls ? ' ' + cls : '');
+    s.textContent = text;
+    term.appendChild(s);
+    term.scrollTop = term.scrollHeight;
+  }
+
+  function setPct(p) {
+    document.getElementById('prog-bar').style.width = p + '%';
+    document.getElementById('prog-pct').textContent  = p + '%';
+  }
+
+  function setScanBtn(enabled, label) {
+    const b = document.getElementById('scan-btn');
+    b.disabled    = !enabled;
+    b.textContent = label || (enabled ? '▶ SCAN' : '⏳ SCANNING...');
+  }
+
+  /* ── Validate inputs ─────────────────────────────── */
+  function validate() {
+    const t  = document.getElementById('target').value.trim();
+    const sp = parseInt(document.getElementById('sp').value, 10);
+    const ep = parseInt(document.getElementById('ep').value, 10);
+
+    if (!t)                     { showErr('Target must not be empty.'); return null; }
+    if (!/^[A-Za-z0-9.\-]+$/.test(t)) { showErr('Target contains invalid characters.'); return null; }
+    if (isNaN(sp) || isNaN(ep)) { showErr('Port values must be integers.'); return null; }
+    if (sp < 1 || sp > 65535)   { showErr('Start port must be 1–65535.'); return null; }
+    if (ep < 1 || ep > 65535)   { showErr('End port must be 1–65535.'); return null; }
+    if (sp >= ep)               { showErr('Start port must be less than end port.'); return null; }
+    if ((ep - sp + 1) > 1000)  { showErr('Maximum 1000 ports per scan.'); return null; }
+    return { target: t, start_port: sp, end_port: ep };
+  }
+
+  /* ── Start scan ──────────────────────────────────── */
+  async function startScan() {
+    if (!disclaimerAccepted) return;
+    clearErr();
+
+    const params = validate();
+    if (!params) return;
+
+    // Reset UI
+    setScanBtn(false);
+    document.getElementById('again-btn').style.display    = 'none';
+    document.getElementById('dl-btn').style.display       = 'none';
+    document.getElementById('results-section').style.display = 'none';
+    document.getElementById('stats').style.display           = 'none';
+    document.getElementById('progress-section').style.display = 'block';
+    document.getElementById('terminal').innerHTML = '';
+    setPct(0);
+    document.getElementById('prog-label').textContent = 'Resolving target...';
+    if (currentEvtSrc) { currentEvtSrc.close(); currentEvtSrc = null; }
+
+    log(`[*] Target     : ${params.target}`, 'hi');
+    log(`[*] Port range : ${params.start_port}–${params.end_port}  (${params.end_port - params.start_port + 1} ports)`);
+    log(`[*] Resolving target...`);
+
+    // POST /scan
+    let resp, data;
+    try {
+      resp = await fetch('/scan', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(params),
+        credentials: 'same-origin',
+      });
+      data = await resp.json();
+    } catch (e) {
+      showErr('Network error — is the server running?');
+      setScanBtn(true);
+      return;
+    }
+
+    if (!resp.ok || data.error) {
+      showErr(data.error || 'Scan failed.');
+      log(`[!] ${data.error || 'Request failed.'}`, 'err');
+      setScanBtn(true);
+      return;
+    }
+
+    lastMeta = data;
+    log(`[+] Resolved to : ${data.ip}`, 'ok');
+    log(`[*] Scanning ports ${data.start_port}–${data.end_port}...`);
+    document.getElementById('prog-label').textContent = `Scanning ${data.ip} — ${data.total} ports`;
+
+    /* ── Open SSE stream ── */
+    const evtSrc = new EventSource(`/stream/${data.scan_id}`, { withCredentials: true });
+    currentEvtSrc = evtSrc;
+
+    evtSrc.onmessage = function(e) {
+      let msg;
+      try { msg = JSON.parse(e.data); } catch { return; }
+
+      if (msg.percent !== undefined) {
+        setPct(msg.percent);
+        log(`[${String(msg.percent).padStart(3)}%] Progress: ${msg.percent}%`);
+      } else if (msg.done) {
+        setPct(100);
+        evtSrc.close();
+        onDone(msg);
+      } else if (msg.error) {
+        evtSrc.close();
+        showErr(msg.error);
+        log(`[!] ${msg.error}`, 'err');
+        setScanBtn(true);
+        document.getElementById('again-btn').style.display = 'inline-block';
+      }
+    };
+
+    evtSrc.onerror = function() {
+      evtSrc.close();
+      if (document.getElementById('results-section').style.display === 'none') {
+        showErr('Connection lost. The scan may still complete — try again.');
+        setScanBtn(true);
+        document.getElementById('again-btn').style.display = 'inline-block';
+      }
+    };
+  }
+
+  /* ── Scan complete ───────────────────────────────── */
+  function onDone(msg) {
+    lastResults = msg.results || [];
+    const total = lastMeta.total || 0;
+    const high  = lastResults.filter(r => r.risk_level === 'HIGH').length;
+
+    log(`[✔] Scan complete. ${lastResults.length} open port(s) found in ${msg.elapsed}s`, 'ok');
+    if (high > 0) log(`[!] ${high} HIGH-RISK port(s) detected!`, 'err');
+
+    // Stats
+    document.getElementById('s-scanned').textContent = total;
+    document.getElementById('s-open').textContent    = lastResults.length;
+    document.getElementById('s-time').textContent    = msg.elapsed + 's';
+    document.getElementById('s-risk').textContent    = high;
+    document.getElementById('stats').style.display   = 'block';
+
+    // Table
+    renderTable(lastResults);
+    document.getElementById('results-section').style.display = 'block';
+    document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+
+    // Buttons
+    setScanBtn(true);
+    document.getElementById('again-btn').style.display = 'inline-block';
+    document.getElementById('dl-btn').style.display    = 'inline-block';
+  }
+
+  /* ── Render results table ────────────────────────── */
+  function renderTable(results) {
+    const wrap = document.getElementById('results-wrap');
+    if (!results.length) {
+      wrap.innerHTML = '<div class="no-results">🔒 No open ports found in the scanned range.</div>';
+      return;
+    }
+
+    let rows = '';
+    for (const r of results) {
+      const isHigh = r.risk_level === 'HIGH';
+      const icon   = isHigh ? '⚠ ' : '';
+      rows += `
+        <tr class="${isHigh ? 'high' : ''}">
+          <td class="port">${r.port}</td>
+          <td class="svc">${r.service}</td>
+          <td><span class="badge badge-${r.risk_level}">${icon}${r.risk_level}</span></td>
+          <td class="rsn">${r.reason}</td>
+        </tr>`;
+    }
+
+    wrap.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Port</th><th>Service</th><th>Risk</th><th>Reason / Notes</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  /* ── Download report (pure JS blob) ─────────────── */
+  function downloadReport() {
+    const ip      = lastMeta.ip || 'unknown';
+    const now     = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const high    = lastResults.filter(r => r.risk_level === 'HIGH').length;
+    const SEP     = '─'.repeat(60);
+
+    const lines = [
+      'PortScanner Report',
+      SEP,
+      `Target   : ${ip}`,
+      `Scanned  : ${now}`,
+      `Ports    : ${lastMeta.start_port}–${lastMeta.end_port}`,
+      SEP,
+      `${'Port'.padEnd(7)}| ${'Service'.padEnd(12)}| ${'Risk'.padEnd(9)}| Reason`,
+      SEP,
+      ...lastResults.map(r =>
+        `${String(r.port).padEnd(7)}| ${r.service.padEnd(12)}| ${r.risk_level.padEnd(9)}| ${r.reason}`
+      ),
+      SEP,
+      `Total open: ${lastResults.length} | High risk: ${high}`,
+    ];
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `port-scan-${ip}-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /* ── Reset UI ────────────────────────────────────── */
+  function resetUI() {
+    clearErr();
+    setPct(0);
+    document.getElementById('terminal').innerHTML = '';
+    document.getElementById('progress-section').style.display = 'none';
+    document.getElementById('results-section').style.display  = 'none';
+    document.getElementById('stats').style.display            = 'none';
+    document.getElementById('again-btn').style.display        = 'none';
+    document.getElementById('dl-btn').style.display           = 'none';
+    document.getElementById('target').value = '';
+    document.getElementById('target').focus();
+    lastResults = [];
+    lastMeta    = {};
+  }
+
+  /* ── Enter key ───────────────────────────────────── */
+  ['target','sp','ep'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !document.getElementById('scan-btn').disabled) startScan();
+    })
+  );
+</script>
+
+</body>
+</html>
